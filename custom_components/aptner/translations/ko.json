@@ -1,0 +1,307 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "아파트너",
+        "description": "아파트너 로그인 정보를 입력하세요.",
+        "data": {
+          "username": "아이디",
+          "password": "비밀번호"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "아파트너에 연결하지 못했습니다.",
+      "invalid_auth": "아이디 또는 비밀번호가 올바르지 않습니다."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "아파트너 옵션",
+        "description": "갱신 주기와 조회 개수를 조정합니다.",
+        "data": {
+          "scan_interval_minutes": "갱신 주기(분)",
+          "page_limit": "요청당 조회 개수"
+        }
+      }
+    }
+  },
+  "services": {
+    "refresh_data": {
+      "name": "데이터 새로고침",
+      "description": "아파트너 데이터를 즉시 새로고침합니다.",
+      "fields": {
+        "entry_id": {
+          "name": "엔트리 ID",
+          "description": "여러 아파트너 계정이 설정된 경우 사용할 설정 엔트리 ID입니다."
+        }
+      }
+    },
+    "submit_vote": {
+      "name": "투표 제출",
+      "description": "아파트너 투표 항목을 제출합니다.",
+      "fields": {
+        "entry_id": {
+          "name": "엔트리 ID",
+          "description": "여러 아파트너 계정이 설정된 경우 사용할 설정 엔트리 ID입니다."
+        },
+        "vote_id": {
+          "name": "투표 ID",
+          "description": "아파트너 투표 ID입니다."
+        },
+        "selection_item_id": {
+          "name": "선택 항목 ID",
+          "description": "선택한 투표 항목 ID입니다."
+        },
+        "sign_file_url": {
+          "name": "서명 파일 URL",
+          "description": "서명이 필요한 투표에서 사용하는 선택 서명 파일 URL입니다."
+        }
+      }
+    },
+    "submit_survey": {
+      "name": "설문 제출",
+      "description": "아파트너 설문 응답을 제출합니다.",
+      "fields": {
+        "entry_id": {
+          "name": "엔트리 ID",
+          "description": "여러 아파트너 계정이 설정된 경우 사용할 설정 엔트리 ID입니다."
+        },
+        "survey_id": {
+          "name": "설문 ID",
+          "description": "아파트너 설문 ID입니다."
+        },
+        "answers": {
+          "name": "응답 목록",
+          "description": "question_id와 answer를 가진 응답 객체 목록입니다."
+        }
+      }
+    },
+    "register_visit_vehicle": {
+      "name": "방문차량 등록",
+      "description": "레거시 방문 예약 API를 사용해 방문차량을 등록합니다.",
+      "fields": {
+        "entry_id": {
+          "name": "엔트리 ID",
+          "description": "여러 아파트너 계정이 설정된 경우 사용할 설정 엔트리 ID입니다."
+        },
+        "car_no": {
+          "name": "차량 번호",
+          "description": "방문 차량 번호입니다."
+        },
+        "visitor_phone": {
+          "name": "방문자 전화번호",
+          "description": "방문자 전화번호입니다."
+        },
+        "visit_date": {
+          "name": "방문 일시",
+          "description": "아파트너 API가 기대하는 형식의 방문 일시입니다."
+        },
+        "visit_purpose": {
+          "name": "방문 목적",
+          "description": "방문 목적 텍스트입니다."
+        }
+      }
+    },
+    "cancel_visit_vehicle": {
+      "name": "방문차량 취소",
+      "description": "기존 방문차량 예약을 취소합니다.",
+      "fields": {
+        "entry_id": {
+          "name": "엔트리 ID",
+          "description": "여러 아파트너 계정이 설정된 경우 사용할 설정 엔트리 ID입니다."
+        },
+        "visit_reserve_idx": {
+          "name": "방문 예약 ID",
+          "description": "취소할 레거시 방문 예약 ID입니다."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "apartment": {
+        "name": "아파트"
+      },
+      "apartment_phone": {
+        "name": "아파트 전화번호"
+      },
+      "usage_services": {
+        "name": "활성 서비스 수"
+      },
+      "notice_count": {
+        "name": "공지사항 수"
+      },
+      "latest_notice_title": {
+        "name": "최신 공지"
+      },
+      "latest_notice_date": {
+        "name": "최신 공지 일시"
+      },
+      "community_count": {
+        "name": "커뮤니티 게시글 수"
+      },
+      "latest_community_title": {
+        "name": "최신 커뮤니티 글"
+      },
+      "complaint_count": {
+        "name": "민원 수"
+      },
+      "latest_complaint_title": {
+        "name": "최신 민원"
+      },
+      "latest_complaint_status": {
+        "name": "최신 민원 상태"
+      },
+      "defect_count": {
+        "name": "하자보수 글 수"
+      },
+      "region_count": {
+        "name": "지역 게시글 수"
+      },
+      "latest_region_title": {
+        "name": "최신 지역 글"
+      },
+      "schedule_count": {
+        "name": "일정 수"
+      },
+      "schedule_next_day": {
+        "name": "다음 일정 일자"
+      },
+      "vote_current_count": {
+        "name": "진행중 투표 수"
+      },
+      "vote_closed_count": {
+        "name": "종료된 투표 수"
+      },
+      "survey_ing_count": {
+        "name": "진행중 설문 수"
+      },
+      "survey_done_count": {
+        "name": "완료된 설문 수"
+      },
+      "aptner_notice_count": {
+        "name": "아파트너 공지 수"
+      },
+      "aptner_notice_latest_title": {
+        "name": "최신 아파트너 공지"
+      },
+      "contacts_count": {
+        "name": "연락처 수"
+      },
+      "primary_contact": {
+        "name": "대표 연락처"
+      },
+      "broadcast_count": {
+        "name": "아파트 방송 수"
+      },
+      "broadcast_latest": {
+        "name": "최신 아파트 방송"
+      },
+      "guest_parking_count": {
+        "name": "방문주차 예약 수"
+      },
+      "guest_parking_history_count": {
+        "name": "방문주차 이력 수"
+      },
+      "guest_parking_household_limit": {
+        "name": "세대당 방문주차 한도"
+      },
+      "guest_parking_remaining_free": {
+        "name": "남은 무료 방문주차"
+      },
+      "parking_discount_history_count": {
+        "name": "주차 결제 이력 수"
+      },
+      "visit_vehicle_usage_count": {
+        "name": "방문차량 예약 수"
+      },
+      "visit_vehicle_valid_count": {
+        "name": "유효 방문차량 예약 수"
+      },
+      "visit_vehicle_next_date": {
+        "name": "다음 방문차량 일자"
+      },
+      "visit_vehicle_next_car_no": {
+        "name": "다음 방문차량 번호"
+      },
+      "visit_vehicle_next_purpose": {
+        "name": "다음 방문차량 방문 목적"
+      },
+      "realtor_count": {
+        "name": "부동산 글 수"
+      },
+      "fire_inspection": {
+        "name": "소방점검",
+        "state": {
+          "none": "점검 없음",
+          "open": "응답 필요",
+          "completed": "응답 완료"
+        }
+      },
+      "fire_inspection_history_count": {
+        "name": "소방점검 이력 수"
+      },
+      "household_member_count": {
+        "name": "세대 구성원 수"
+      },
+      "household_verified_count": {
+        "name": "인증된 세대 구성원 수"
+      },
+      "management_fee": {
+        "name": "관리비"
+      },
+      "management_fee_period": {
+        "name": "관리비 기준월"
+      },
+      "management_fee_average": {
+        "name": "평균 관리비"
+      },
+      "management_fee_previous": {
+        "name": "전월 관리비"
+      },
+      "management_fee_previous_period": {
+        "name": "전월 관리비 기준월"
+      },
+      "management_fee_change": {
+        "name": "전월 대비 관리비 증감"
+      },
+      "management_fee_history_count": {
+        "name": "관리비 이력 수"
+      },
+      "management_fee_area": {
+        "name": "관리비 면적"
+      },
+      "management_fee_current_late_fee": {
+        "name": "당월 연체료"
+      },
+      "management_fee_delinquent_fee": {
+        "name": "미납 관리비"
+      },
+      "management_fee_delinquent_late_fee": {
+        "name": "미납 연체료"
+      },
+      "management_fee_breakdown_count": {
+        "name": "관리비 세부 항목 수"
+      }
+    },
+    "binary_sensor": {
+      "parking_vehicle_inside": {
+        "name": "현재 주차중 차량"
+      },
+      "parking_vehicle_last_event_entry": {
+        "name": "마지막 주차 이벤트 입차"
+      },
+      "parking_vehicle_last_event_exit": {
+        "name": "마지막 주차 이벤트 출차"
+      },
+      "visit_vehicle_alert": {
+        "name": "방문차량 입차 알림"
+      },
+      "visit_vehicle_today": {
+        "name": "오늘 방문차량"
+      }
+    }
+  }
+}

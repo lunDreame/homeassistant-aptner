@@ -1,0 +1,86 @@
+refresh_data:
+  fields:
+    entry_id:
+      required: false
+      selector:
+        text:
+
+submit_vote:
+  fields:
+    entry_id:
+      required: false
+      selector:
+        text:
+    vote_id:
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+    selection_item_id:
+      required: false
+      selector:
+        number:
+          min: 1
+          mode: box
+    sign_file_url:
+      required: false
+      selector:
+        text:
+
+submit_survey:
+  fields:
+    entry_id:
+      required: false
+      selector:
+        text:
+    survey_id:
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+    answers:
+      required: true
+      example:
+        - question_id: 1
+          answer: "2"
+        - question_id: 2
+          answer: "기타 의견"
+      selector:
+        object:
+
+register_visit_vehicle:
+  fields:
+    entry_id:
+      required: false
+      selector:
+        text:
+    car_no:
+      required: true
+      selector:
+        text:
+    visitor_phone:
+      required: true
+      selector:
+        text:
+    visit_date:
+      required: true
+      example: "2026-03-01 14:30:00"
+      selector:
+        text:
+    visit_purpose:
+      required: true
+      selector:
+        text:
+
+cancel_visit_vehicle:
+  fields:
+    entry_id:
+      required: false
+      selector:
+        text:
+    visit_reserve_idx:
+      required: true
+      selector:
+        text:

@@ -1,0 +1,307 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Aptner",
+        "description": "Enter your Aptner login.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Aptner.",
+      "invalid_auth": "Invalid username or password."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Aptner Options",
+        "description": "Tune polling and fetch limits.",
+        "data": {
+          "scan_interval_minutes": "Scan interval (minutes)",
+          "page_limit": "Items to fetch per request"
+        }
+      }
+    }
+  },
+  "services": {
+    "refresh_data": {
+      "name": "Refresh data",
+      "description": "Refresh Aptner data immediately.",
+      "fields": {
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Optional config entry ID when multiple Aptner accounts are configured."
+        }
+      }
+    },
+    "submit_vote": {
+      "name": "Submit vote",
+      "description": "Submit a vote selection to Aptner.",
+      "fields": {
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Optional config entry ID when multiple Aptner accounts are configured."
+        },
+        "vote_id": {
+          "name": "Vote ID",
+          "description": "The Aptner vote ID."
+        },
+        "selection_item_id": {
+          "name": "Selection item ID",
+          "description": "The selected vote item ID."
+        },
+        "sign_file_url": {
+          "name": "Sign file URL",
+          "description": "Optional signature file URL for sign-required votes."
+        }
+      }
+    },
+    "submit_survey": {
+      "name": "Submit survey",
+      "description": "Submit answers to an Aptner survey.",
+      "fields": {
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Optional config entry ID when multiple Aptner accounts are configured."
+        },
+        "survey_id": {
+          "name": "Survey ID",
+          "description": "The Aptner survey ID."
+        },
+        "answers": {
+          "name": "Answers",
+          "description": "A list of answer objects with question_id and answer."
+        }
+      }
+    },
+    "register_visit_vehicle": {
+      "name": "Register visit vehicle",
+      "description": "Register a visitor car using the legacy visit reservation API.",
+      "fields": {
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Optional config entry ID when multiple Aptner accounts are configured."
+        },
+        "car_no": {
+          "name": "Car number",
+          "description": "The visitor car plate number."
+        },
+        "visitor_phone": {
+          "name": "Visitor phone",
+          "description": "The visitor phone number."
+        },
+        "visit_date": {
+          "name": "Visit date",
+          "description": "Visit date in the same format expected by the Aptner API."
+        },
+        "visit_purpose": {
+          "name": "Visit purpose",
+          "description": "Purpose text for the visit."
+        }
+      }
+    },
+    "cancel_visit_vehicle": {
+      "name": "Cancel visit vehicle",
+      "description": "Cancel an existing visitor car reservation.",
+      "fields": {
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Optional config entry ID when multiple Aptner accounts are configured."
+        },
+        "visit_reserve_idx": {
+          "name": "Visit reservation ID",
+          "description": "The legacy visitor reservation ID to cancel."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "apartment": {
+        "name": "Apartment"
+      },
+      "apartment_phone": {
+        "name": "Apartment Phone"
+      },
+      "usage_services": {
+        "name": "Enabled Usage Services"
+      },
+      "notice_count": {
+        "name": "Notice Count"
+      },
+      "latest_notice_title": {
+        "name": "Latest Notice"
+      },
+      "latest_notice_date": {
+        "name": "Latest Notice Date"
+      },
+      "community_count": {
+        "name": "Community Count"
+      },
+      "latest_community_title": {
+        "name": "Latest Community Post"
+      },
+      "complaint_count": {
+        "name": "Complaint Count"
+      },
+      "latest_complaint_title": {
+        "name": "Latest Complaint"
+      },
+      "latest_complaint_status": {
+        "name": "Latest Complaint Status"
+      },
+      "defect_count": {
+        "name": "Defect Count"
+      },
+      "region_count": {
+        "name": "Region Board Count"
+      },
+      "latest_region_title": {
+        "name": "Latest Region Post"
+      },
+      "schedule_count": {
+        "name": "Schedule Count"
+      },
+      "schedule_next_day": {
+        "name": "Next Schedule Day"
+      },
+      "vote_current_count": {
+        "name": "Current Vote Count"
+      },
+      "vote_closed_count": {
+        "name": "Closed Vote Count"
+      },
+      "survey_ing_count": {
+        "name": "Ongoing Survey Count"
+      },
+      "survey_done_count": {
+        "name": "Completed Survey Count"
+      },
+      "aptner_notice_count": {
+        "name": "Aptner Notice Count"
+      },
+      "aptner_notice_latest_title": {
+        "name": "Latest Aptner Notice"
+      },
+      "contacts_count": {
+        "name": "Contact Count"
+      },
+      "primary_contact": {
+        "name": "Primary Contact"
+      },
+      "broadcast_count": {
+        "name": "Apartment Broadcast Count"
+      },
+      "broadcast_latest": {
+        "name": "Latest Apartment Broadcast"
+      },
+      "guest_parking_count": {
+        "name": "Guest Parking Count"
+      },
+      "guest_parking_history_count": {
+        "name": "Guest Parking History Count"
+      },
+      "guest_parking_household_limit": {
+        "name": "Guest Parking Household Limit"
+      },
+      "guest_parking_remaining_free": {
+        "name": "Guest Parking Remaining Free"
+      },
+      "parking_discount_history_count": {
+        "name": "Parking Payment History Count"
+      },
+      "visit_vehicle_usage_count": {
+        "name": "Visit Vehicle Reservation Count"
+      },
+      "visit_vehicle_valid_count": {
+        "name": "Valid Visit Vehicle Reservation Count"
+      },
+      "visit_vehicle_next_date": {
+        "name": "Next Visit Vehicle Date"
+      },
+      "visit_vehicle_next_car_no": {
+        "name": "Next Visit Vehicle Car Number"
+      },
+      "visit_vehicle_next_purpose": {
+        "name": "Next Visit Vehicle Purpose"
+      },
+      "realtor_count": {
+        "name": "Realtor Count"
+      },
+      "fire_inspection": {
+        "name": "Fire Inspection",
+        "state": {
+          "none": "No Inspection",
+          "open": "Response Required",
+          "completed": "Completed"
+        }
+      },
+      "fire_inspection_history_count": {
+        "name": "Fire Inspection History Count"
+      },
+      "household_member_count": {
+        "name": "Household Member Count"
+      },
+      "household_verified_count": {
+        "name": "Verified Household Count"
+      },
+      "management_fee": {
+        "name": "Management Fee"
+      },
+      "management_fee_period": {
+        "name": "Management Fee Period"
+      },
+      "management_fee_average": {
+        "name": "Management Fee Average"
+      },
+      "management_fee_previous": {
+        "name": "Previous Management Fee"
+      },
+      "management_fee_previous_period": {
+        "name": "Previous Management Fee Period"
+      },
+      "management_fee_change": {
+        "name": "Management Fee Change"
+      },
+      "management_fee_history_count": {
+        "name": "Management Fee History Count"
+      },
+      "management_fee_area": {
+        "name": "Management Fee Area"
+      },
+      "management_fee_current_late_fee": {
+        "name": "Management Fee Current Late Fee"
+      },
+      "management_fee_delinquent_fee": {
+        "name": "Management Fee Delinquent Fee"
+      },
+      "management_fee_delinquent_late_fee": {
+        "name": "Management Fee Delinquent Late Fee"
+      },
+      "management_fee_breakdown_count": {
+        "name": "Management Fee Breakdown Count"
+      }
+    },
+    "binary_sensor": {
+      "parking_vehicle_inside": {
+        "name": "Parking Vehicle Inside"
+      },
+      "parking_vehicle_last_event_entry": {
+        "name": "Parking Last Event Entry"
+      },
+      "parking_vehicle_last_event_exit": {
+        "name": "Parking Last Event Exit"
+      },
+      "visit_vehicle_alert": {
+        "name": "Visit Vehicle Alert"
+      },
+      "visit_vehicle_today": {
+        "name": "Visit Vehicle Today"
+      }
+    }
+  }
+}

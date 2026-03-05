@@ -214,6 +214,12 @@
       "parking_discount_history_count": {
         "name": "Parking Payment History Count"
       },
+      "parking_vehicle_last_entry_at": {
+        "name": "Parking Last Entry Time"
+      },
+      "parking_vehicle_last_exit_at": {
+        "name": "Parking Last Exit Time"
+      },
       "visit_vehicle_usage_count": {
         "name": "Visit Vehicle Reservation Count"
       },

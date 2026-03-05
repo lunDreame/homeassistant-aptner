@@ -65,6 +65,8 @@
 - `guest_parking_household_limit`
 - `guest_parking_remaining_free`
 - `parking_discount_history_count`
+- `parking_vehicle_last_entry_at`
+- `parking_vehicle_last_exit_at`
 - `visit_vehicle_usage_count`
 - `visit_vehicle_valid_count`
 - `visit_vehicle_next_date`
@@ -116,7 +118,7 @@
 - 투표/설문: `latest_title`, `vote_ids`, `survey_ids`
 - 연락처/방송: `primary_contact_data`, `contact_numbers`, `recent_titles`
 - 방문차량: `valid_count`, `expired_count`, `next_reservation`, `next_days_until`, `today_count`, `today_reservations`
-- 주차 이력: `active_parking_count`, `active_car_numbers`, `latest_event`, `latest_event_summary`
+- 주차 이력: `active_parking_count`, `active_car_numbers`, `latest_event`, `latest_event_summary`, `latest_entry_at`, `latest_exit_at`
 - 주차 결제: `latest_amount`, `total_amount`
 - 관리비: `summary`, `breakdown_items`, `top_breakdown_item`, `change_direction`, `has_outstanding_balance`
 - 관리비 세부 항목 센서: `delta`, `is_above_average`, `is_below_average`, `value_ratio_to_average`

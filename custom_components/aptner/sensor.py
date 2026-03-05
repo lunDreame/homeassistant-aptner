@@ -184,6 +184,8 @@ PARKING_KEYS = {
     "guest_parking_household_limit",
     "guest_parking_remaining_free",
     "parking_discount_history_count",
+    "parking_vehicle_last_entry_at",
+    "parking_vehicle_last_exit_at",
     "parking_vehicle_inside",
     "parking_vehicle_last_event_entry",
     "parking_vehicle_last_event_exit",
@@ -694,6 +696,108 @@ def _guest_parking_active_items(payload: Any) -> list[dict[str, Any]]:
     ]
 
 
+def _guest_parking_is_exit(item: dict[str, Any]) -> bool | None:
+    value = item.get("isExit")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"y", "yes", "true", "1", "exit"}:
+            return True
+        if normalized in {"n", "no", "false", "0", "entry"}:
+            return False
+    return None
+
+
+def _guest_parking_entry_timestamp(item: dict[str, Any]) -> datetime | None:
+    return _parse_parking_history_datetime(item.get("inDatetime")) or _parse_parking_history_datetime(
+        item.get("inDateTime")
+    )
+
+
+def _guest_parking_exit_timestamp(item: dict[str, Any]) -> datetime | None:
+    return _parse_parking_history_datetime(item.get("outDatetime")) or _parse_parking_history_datetime(
+        item.get("outDateTime")
+    )
+
+
+def _guest_parking_latest_item_by_timestamp(
+    items: list[dict[str, Any]],
+    timestamp_fn: Callable[[dict[str, Any]], datetime | None],
+) -> dict[str, Any] | None:
+    candidates = [item for item in items if timestamp_fn(item) is not None]
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda item: (
+            timestamp_fn(item) or datetime.min,
+            str(item.get("carNo") or ""),
+        ),
+    )
+
+
+def _guest_parking_latest_event_item(payload: Any, *, is_exit: bool) -> dict[str, Any] | None:
+    items = _guest_parking_history_items(payload)
+    if is_exit:
+        return _guest_parking_latest_item_by_timestamp(items, _guest_parking_exit_timestamp)
+    return _guest_parking_latest_item_by_timestamp(items, _guest_parking_entry_timestamp)
+
+
+def _guest_parking_item_datetime_text(
+    item: dict[str, Any],
+    *keys: str,
+    fallback_fn: Callable[[dict[str, Any]], datetime | None] | None = None,
+) -> str | None:
+    value = _first_string_value(item, *keys)
+    if value is not None:
+        return value
+    if fallback_fn is not None:
+        fallback_at = fallback_fn(item)
+        if fallback_at is not None:
+            return fallback_at.isoformat(sep=" ")
+    event_at = _guest_parking_event_timestamp(item)
+    return event_at.isoformat(sep=" ") if event_at is not None else None
+
+
+def _guest_parking_latest_entry(payload: Any) -> dict[str, Any] | None:
+    return _guest_parking_latest_event_item(payload, is_exit=False)
+
+
+def _guest_parking_latest_exit(payload: Any) -> dict[str, Any] | None:
+    return _guest_parking_latest_event_item(payload, is_exit=True)
+
+
+def _guest_parking_latest_entry_at(payload: Any) -> str | None:
+    latest_entry = _guest_parking_latest_entry(payload)
+    if latest_entry is None:
+        return None
+    return _guest_parking_item_datetime_text(
+        latest_entry,
+        "inDatetime",
+        "inDateTime",
+        "entryDatetime",
+        "entryDateTime",
+        fallback_fn=_guest_parking_entry_timestamp,
+    )
+
+
+def _guest_parking_latest_exit_at(payload: Any) -> str | None:
+    latest_exit = _guest_parking_latest_exit(payload)
+    if latest_exit is None:
+        return None
+    return _guest_parking_item_datetime_text(
+        latest_exit,
+        "outDatetime",
+        "outDateTime",
+        "exitDatetime",
+        "exitDateTime",
+        fallback_fn=_guest_parking_exit_timestamp,
+    )
+
+
 def _guest_parking_latest_event(payload: Any) -> dict[str, Any] | None:
     items = _guest_parking_history_items(payload)
     if not items:
@@ -705,7 +809,7 @@ def _guest_parking_latest_event(payload: Any) -> dict[str, Any] | None:
             str(item.get("carNo") or ""),
         ),
     )
-    event_type = "exit" if latest_item.get("isExit") is True else "entry"
+    event_type = "exit" if _guest_parking_is_exit(latest_item) is True else "entry"
     event_at = _guest_parking_event_timestamp(latest_item)
     return {
         "type": event_type,
@@ -762,6 +866,8 @@ def _guest_parking_history_attributes(payload: Any) -> dict[str, Any]:
     history_items = _guest_parking_history_items(payload)
     active_items = _guest_parking_active_items(payload)
     latest_event = _guest_parking_latest_event(payload)
+    latest_entry = _guest_parking_latest_entry(payload)
+    latest_exit = _guest_parking_latest_exit(payload)
     attrs["history_count"] = len(history)
     attrs["latest_history"] = history[0] if history and isinstance(history[0], dict) else None
     attrs["history_item_count"] = len(history_items)
@@ -778,6 +884,20 @@ def _guest_parking_history_attributes(payload: Any) -> dict[str, Any]:
     attrs["latest_event_type"] = latest_event.get("type") if isinstance(latest_event, dict) else None
     attrs["latest_event_at"] = latest_event.get("at") if isinstance(latest_event, dict) else None
     attrs["latest_event_item"] = latest_event.get("item") if isinstance(latest_event, dict) else None
+    attrs["latest_entry"] = latest_entry
+    attrs["latest_entry_at"] = _guest_parking_latest_entry_at(payload)
+    attrs["latest_entry_car_no"] = (
+        latest_entry.get("carNo")
+        if isinstance(latest_entry, dict) and isinstance(latest_entry.get("carNo"), str)
+        else None
+    )
+    attrs["latest_exit"] = latest_exit
+    attrs["latest_exit_at"] = _guest_parking_latest_exit_at(payload)
+    attrs["latest_exit_car_no"] = (
+        latest_exit.get("carNo")
+        if isinstance(latest_exit, dict) and isinstance(latest_exit.get("carNo"), str)
+        else None
+    )
     attrs["has_active_vehicle"] = bool(active_items)
     attrs["active_unique_count"] = len(attrs["active_car_numbers"])
     attrs["latest_active_vehicle"] = active_items[0] if active_items and isinstance(active_items[0], dict) else None
@@ -1735,6 +1855,22 @@ SENSORS: tuple[AptnerSensorDescription, ...] = (
         icon="mdi:cash-clock",
         value_fn=lambda data: _parking_discount_history_count(data.get("parking_discount_history")),
         attributes_fn=lambda data: _parking_discount_attributes(data.get("parking_discount_history")),
+    ),
+    AptnerSensorDescription(
+        key="parking_vehicle_last_entry_at",
+        name="Parking Last Entry Time",
+        icon="mdi:car-arrow-left",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _guest_parking_latest_entry_at(data.get("guest_parking_history")),
+        attributes_fn=lambda data: _guest_parking_history_attributes(data.get("guest_parking_history")),
+    ),
+    AptnerSensorDescription(
+        key="parking_vehicle_last_exit_at",
+        name="Parking Last Exit Time",
+        icon="mdi:car-arrow-right",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _guest_parking_latest_exit_at(data.get("guest_parking_history")),
+        attributes_fn=lambda data: _guest_parking_history_attributes(data.get("guest_parking_history")),
     ),
     AptnerSensorDescription(
         key="visit_vehicle_usage_count",

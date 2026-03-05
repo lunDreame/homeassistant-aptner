@@ -214,6 +214,12 @@
       "parking_discount_history_count": {
         "name": "주차 결제 이력 수"
       },
+      "parking_vehicle_last_entry_at": {
+        "name": "최근 입차 시각"
+      },
+      "parking_vehicle_last_exit_at": {
+        "name": "최근 출차 시각"
+      },
       "visit_vehicle_usage_count": {
         "name": "방문차량 예약 수"
       },

@@ -4,7 +4,7 @@ import asyncio
 import json
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Any
 
 import aiohttp
@@ -119,13 +119,7 @@ class AptnerApiClient:
         results = await asyncio.gather(*(task for _, task in request_plan))
 
         dashboard: dict[str, Any] = {
-            "user": user,
             "apartment": apartment,
-            "metadata": {
-                "username": self._username,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "legacy_fee_available": self._legacy is not None,
-            },
         }
 
         for (key, _), value in zip(request_plan, results, strict=True):

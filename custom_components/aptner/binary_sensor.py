@@ -20,6 +20,7 @@ from .sensor import (
     _guest_parking_active_items,
     _guest_parking_history_attributes,
     _guest_parking_latest_event,
+    _parking_vehicle_history_payload,
     _visit_today_item,
     _visit_usage_attributes,
     _visit_valid_items,
@@ -59,44 +60,65 @@ def _visit_vehicle_today_attributes(data: dict[str, Any]) -> dict[str, Any]:
     return attrs
 
 
-def _parking_vehicle_inside_on(data: dict[str, Any]) -> bool:
-    payload = data.get("guest_parking_history")
+def _parking_vehicle_inside_on(
+    data: dict[str, Any],
+    *,
+    include_resident: bool | None = None,
+) -> bool:
+    payload = _parking_vehicle_history_payload(data)
     if not isinstance(payload, dict):
         return False
-    active_count = _guest_parking_active_count(payload)
+    active_count = _guest_parking_active_count(payload, include_resident=include_resident)
     if active_count is None:
         return False
     return active_count > 0
 
 
-def _parking_vehicle_last_event_entry_on(data: dict[str, Any]) -> bool:
-    payload = data.get("guest_parking_history")
+def _parking_vehicle_last_event_entry_on(
+    data: dict[str, Any],
+    *,
+    include_resident: bool | None = None,
+) -> bool:
+    payload = _parking_vehicle_history_payload(data)
     if not isinstance(payload, dict):
         return False
-    latest_event = _guest_parking_latest_event(payload)
+    latest_event = _guest_parking_latest_event(payload, include_resident=include_resident)
     if latest_event is None:
         return False
     return latest_event.get("type") == "entry"
 
 
-def _parking_vehicle_last_event_exit_on(data: dict[str, Any]) -> bool:
-    payload = data.get("guest_parking_history")
+def _parking_vehicle_last_event_exit_on(
+    data: dict[str, Any],
+    *,
+    include_resident: bool | None = None,
+) -> bool:
+    payload = _parking_vehicle_history_payload(data)
     if not isinstance(payload, dict):
         return False
-    latest_event = _guest_parking_latest_event(payload)
+    latest_event = _guest_parking_latest_event(payload, include_resident=include_resident)
     if latest_event is None:
         return False
     return latest_event.get("type") == "exit"
 
 
-def _parking_vehicle_binary_attributes(data: dict[str, Any]) -> dict[str, Any]:
-    payload = data.get("guest_parking_history")
-    attrs = _guest_parking_history_attributes(payload)
+def _parking_vehicle_binary_attributes(
+    data: dict[str, Any],
+    *,
+    include_resident: bool | None = None,
+    scope: str = "all_vehicles",
+) -> dict[str, Any]:
+    payload = _parking_vehicle_history_payload(data)
+    attrs = _guest_parking_history_attributes(
+        payload,
+        include_resident=include_resident,
+        scope=scope,
+    )
     if not isinstance(attrs, dict):
         return {"value": attrs}
     attrs = dict(attrs)
-    active_items = _guest_parking_active_items(payload)
-    latest_event = _guest_parking_latest_event(payload)
+    active_items = _guest_parking_active_items(payload, include_resident=include_resident)
+    latest_event = _guest_parking_latest_event(payload, include_resident=include_resident)
     current_parked_vehicles = list(
         dict.fromkeys(
             item.get("carNo")
@@ -132,20 +154,80 @@ BINARY_SENSORS: tuple[AptnerBinarySensorDescription, ...] = (
     AptnerBinarySensorDescription(
         key="parking_vehicle_inside",
         icon="mdi:garage-open-variant",
-        is_on_fn=_parking_vehicle_inside_on,
-        attributes_fn=_parking_vehicle_binary_attributes,
+        is_on_fn=lambda data: _parking_vehicle_inside_on(
+            data,
+            include_resident=False,
+        ),
+        attributes_fn=lambda data: _parking_vehicle_binary_attributes(
+            data,
+            include_resident=False,
+            scope="visitor_only",
+        ),
     ),
     AptnerBinarySensorDescription(
         key="parking_vehicle_last_event_entry",
         icon="mdi:car-arrow-left",
-        is_on_fn=_parking_vehicle_last_event_entry_on,
-        attributes_fn=_parking_vehicle_binary_attributes,
+        is_on_fn=lambda data: _parking_vehicle_last_event_entry_on(
+            data,
+            include_resident=False,
+        ),
+        attributes_fn=lambda data: _parking_vehicle_binary_attributes(
+            data,
+            include_resident=False,
+            scope="visitor_only",
+        ),
     ),
     AptnerBinarySensorDescription(
         key="parking_vehicle_last_event_exit",
         icon="mdi:car-arrow-right",
-        is_on_fn=_parking_vehicle_last_event_exit_on,
-        attributes_fn=_parking_vehicle_binary_attributes,
+        is_on_fn=lambda data: _parking_vehicle_last_event_exit_on(
+            data,
+            include_resident=False,
+        ),
+        attributes_fn=lambda data: _parking_vehicle_binary_attributes(
+            data,
+            include_resident=False,
+            scope="visitor_only",
+        ),
+    ),
+    AptnerBinarySensorDescription(
+        key="parking_vehicle_inside_all",
+        icon="mdi:garage-open-variant",
+        is_on_fn=lambda data: _parking_vehicle_inside_on(
+            data,
+            include_resident=None,
+        ),
+        attributes_fn=lambda data: _parking_vehicle_binary_attributes(
+            data,
+            include_resident=None,
+            scope="all_vehicles",
+        ),
+    ),
+    AptnerBinarySensorDescription(
+        key="parking_vehicle_last_event_entry_all",
+        icon="mdi:car-arrow-left",
+        is_on_fn=lambda data: _parking_vehicle_last_event_entry_on(
+            data,
+            include_resident=None,
+        ),
+        attributes_fn=lambda data: _parking_vehicle_binary_attributes(
+            data,
+            include_resident=None,
+            scope="all_vehicles",
+        ),
+    ),
+    AptnerBinarySensorDescription(
+        key="parking_vehicle_last_event_exit_all",
+        icon="mdi:car-arrow-right",
+        is_on_fn=lambda data: _parking_vehicle_last_event_exit_on(
+            data,
+            include_resident=None,
+        ),
+        attributes_fn=lambda data: _parking_vehicle_binary_attributes(
+            data,
+            include_resident=None,
+            scope="all_vehicles",
+        ),
     ),
     AptnerBinarySensorDescription(
         key="visit_vehicle_alert",

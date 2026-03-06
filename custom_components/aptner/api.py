@@ -106,6 +106,7 @@ class AptnerApiClient:
             ("broadcast", asyncio.create_task(self._safe_fetch(self._fetch_broadcast()))),
             ("guest_parking", asyncio.create_task(self._safe_fetch(self._fetch_guest_parking()))),
             ("guest_parking_history", asyncio.create_task(self._safe_fetch(self._fetch_guest_parking_history()))),
+            ("parking_hub_history", asyncio.create_task(self._safe_fetch(self._fetch_parking_hub_history()))),
             ("parking_discount_history", asyncio.create_task(self._safe_fetch(self._fetch_parking_discount_history()))),
             ("household_members", asyncio.create_task(self._safe_fetch(self._fetch_household_members()))),
             ("visit_vehicle_usage", asyncio.create_task(self._safe_fetch(self._fetch_visit_vehicle_usage()))),
@@ -279,7 +280,7 @@ class AptnerApiClient:
             method,
             url,
             headers=headers,
-            params=self._clean_dict(params),
+            params=self._clean_query_params(params),
             json=self._clean_dict(payload) if form is None else None,
             data=self._clean_dict(form),
         ) as response:
@@ -364,6 +365,14 @@ class AptnerApiClient:
     async def _fetch_guest_parking_history(self) -> Any:
         return await self._request_v2("GET", "/pc/monthly-access-history")
 
+    async def _fetch_parking_hub_history(self) -> Any:
+        # parkinghub history uses isResident=true to include household + visitor cars.
+        return await self._request_v2(
+            "GET",
+            "/pc/parking-hub/accesses",
+            params={"isResident": True},
+        )
+
     async def _fetch_parking_discount_history(self) -> Any:
         return await self._request_v2("GET", "/pc/sales/history")
 
@@ -413,29 +422,72 @@ class AptnerApiClient:
             periods = []
 
         latest_period = periods[0] if periods else None
-        details: list[dict[str, Any]] = []
+        period_details: list[dict[str, Any]] = []
+        for period in periods[:2]:
+            if not isinstance(period, dict):
+                continue
+            fee_id = period.get("id")
+            if fee_id is None:
+                continue
 
-        fee_id = latest_period.get("id") if isinstance(latest_period, dict) else None
-        if fee_id is not None:
-            detail_payload = await self._request_legacy(
-                "GET",
-                "/fee/fee_list_data",
-                params={
-                    "id": fee_id,
-                    "apt_tag": self._legacy.apartment_tag,
-                    "mb_dong": self._legacy.dong,
-                    "mb_ho": self._legacy.ho,
-                },
+            detail_payload = await self._safe_fetch(
+                self._request_legacy(
+                    "GET",
+                    "/fee/fee_list_data",
+                    params={
+                        "id": fee_id,
+                        "apt_tag": self._legacy.apartment_tag,
+                        "mb_dong": self._legacy.dong,
+                        "mb_ho": self._legacy.ho,
+                    },
+                )
             )
             raw_details = detail_payload.get("Item") if isinstance(detail_payload, dict) else None
-            if isinstance(raw_details, list):
-                details = raw_details
+            details = raw_details if isinstance(raw_details, list) else []
+            detail_error = (
+                detail_payload.get("_error")
+                if isinstance(detail_payload, dict) and isinstance(detail_payload.get("_error"), str)
+                else None
+            )
+            period_details.append(
+                {
+                    "period_id": fee_id,
+                    "period": period,
+                    "details": details,
+                    "detail": details[0] if details and isinstance(details[0], dict) else None,
+                    "detail_error": detail_error,
+                }
+            )
+
+        latest_period_detail = period_details[0] if period_details and isinstance(period_details[0], dict) else None
+        previous_period_detail = (
+            period_details[1]
+            if len(period_details) > 1 and isinstance(period_details[1], dict)
+            else None
+        )
+        latest_details = (
+            latest_period_detail.get("details")
+            if isinstance(latest_period_detail, dict) and isinstance(latest_period_detail.get("details"), list)
+            else []
+        )
+        latest_detail = (
+            latest_period_detail.get("detail")
+            if isinstance(latest_period_detail, dict) and isinstance(latest_period_detail.get("detail"), dict)
+            else None
+        )
+        previous_detail = (
+            previous_period_detail.get("detail")
+            if isinstance(previous_period_detail, dict) and isinstance(previous_period_detail.get("detail"), dict)
+            else None
+        )
 
         return {
-            "latest_detail": details[0] if details and isinstance(details[0], dict) else None,
+            "latest_detail": latest_detail,
+            "previous_detail": previous_detail,
             "latest_period": latest_period,
             "periods": periods,
-            "details": details,
+            "details": latest_details,
+            "period_details": period_details,
         }
 
     async def async_submit_vote(
@@ -567,3 +619,23 @@ class AptnerApiClient:
         if data is None:
             return None
         return {key: value for key, value in data.items() if value is not None}
+
+    def _clean_query_params(self, data: dict[str, Any] | None) -> dict[str, Any] | None:
+        if data is None:
+            return None
+        cleaned: dict[str, Any] = {}
+        for key, value in data.items():
+            if value is None:
+                continue
+            if isinstance(value, bool):
+                cleaned[key] = "true" if value else "false"
+                continue
+            if isinstance(value, (list, tuple)):
+                cleaned[key] = [
+                    ("true" if item else "false") if isinstance(item, bool) else item
+                    for item in value
+                    if item is not None
+                ]
+                continue
+            cleaned[key] = value
+        return cleaned

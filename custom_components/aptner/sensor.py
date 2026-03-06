@@ -186,9 +186,14 @@ PARKING_KEYS = {
     "parking_discount_history_count",
     "parking_vehicle_last_entry_at",
     "parking_vehicle_last_exit_at",
+    "parking_vehicle_last_entry_at_all",
+    "parking_vehicle_last_exit_at_all",
     "parking_vehicle_inside",
+    "parking_vehicle_inside_all",
     "parking_vehicle_last_event_entry",
     "parking_vehicle_last_event_exit",
+    "parking_vehicle_last_event_entry_all",
+    "parking_vehicle_last_event_exit_all",
     "visit_vehicle_usage_count",
     "visit_vehicle_valid_count",
     "visit_vehicle_next_date",
@@ -654,7 +659,14 @@ def _guest_parking_reservations(payload: Any) -> list[dict[str, Any]]:
 def _parse_parking_history_datetime(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value:
         return None
-    for fmt in ("%Y.%m.%d %H:%M", "%Y-%m-%d %H:%M", "%Y.%m.%d", "%Y-%m-%d"):
+    for fmt in (
+        "%Y.%m.%d %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y.%m.%d %H:%M",
+        "%Y-%m-%d %H:%M",
+        "%Y.%m.%d",
+        "%Y-%m-%d",
+    ):
         try:
             return datetime.strptime(value, fmt)
         except ValueError:
@@ -662,15 +674,78 @@ def _parse_parking_history_datetime(value: Any) -> datetime | None:
     return None
 
 
-def _guest_parking_history_items(payload: Any) -> list[dict[str, Any]]:
+def _boolean_from_any(value: Any, *, include_event_words: bool = False) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"y", "yes", "true", "1"}:
+            return True
+        if normalized in {"n", "no", "false", "0"}:
+            return False
+        if include_event_words:
+            if normalized == "exit":
+                return True
+            if normalized == "entry":
+                return False
+    return None
+
+
+def _guest_parking_is_resident(item: dict[str, Any]) -> bool | None:
+    for key in ("isResident", "resident", "isMyCar", "myCar"):
+        value = _boolean_from_any(item.get(key))
+        if value is not None:
+            return value
+    car_type = item.get("carType")
+    if isinstance(car_type, str):
+        normalized = car_type.strip().upper()
+        if normalized == "HOUSEHOLD":
+            return True
+        if normalized:
+            return False
+    return None
+
+
+def _guest_parking_history_items(
+    payload: Any,
+    *,
+    include_resident: bool | None = None,
+) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    access_list = _list_or_empty(payload, "accessList")
+    if access_list:
+        for item in access_list:
+            if not isinstance(item, dict):
+                continue
+            is_resident = _guest_parking_is_resident(item)
+            if include_resident is True and is_resident is not True:
+                continue
+            if include_resident is False and is_resident is True:
+                continue
+            normalized = dict(item)
+            normalized["_is_resident"] = is_resident
+            normalized["inDatetime"] = item.get("inDatetime") or item.get("inDate")
+            normalized["outDatetime"] = item.get("outDatetime") or item.get("outDate")
+            if "isExit" not in normalized:
+                normalized["isExit"] = _boolean_from_any(item.get("isOut"))
+            items.append(normalized)
+        return items
+
     for parent in _list_or_empty(payload, "monthlyParkingHistoryList"):
         if not isinstance(parent, dict):
             continue
         for item in _list_or_empty(parent, "visitCarUseHistoryReportList"):
             if not isinstance(item, dict):
                 continue
+            is_resident = _guest_parking_is_resident(item)
+            if include_resident is True and is_resident is not True:
+                continue
+            if include_resident is False and is_resident is True:
+                continue
             normalized = dict(item)
+            normalized["_is_resident"] = is_resident
             normalized["year"] = parent.get("year")
             normalized["month"] = parent.get("month")
             normalized["month_remaining_free"] = parent.get("remainedFreeParkingCount")
@@ -679,7 +754,7 @@ def _guest_parking_history_items(payload: Any) -> list[dict[str, Any]]:
 
 
 def _guest_parking_event_timestamp(item: dict[str, Any]) -> datetime | None:
-    if item.get("isExit") is True:
+    if _guest_parking_is_exit(item) is True:
         return _parse_parking_history_datetime(item.get("outDatetime")) or _parse_parking_history_datetime(
             item.get("inDatetime")
         )
@@ -688,38 +763,38 @@ def _guest_parking_event_timestamp(item: dict[str, Any]) -> datetime | None:
     )
 
 
-def _guest_parking_active_items(payload: Any) -> list[dict[str, Any]]:
+def _guest_parking_active_items(
+    payload: Any,
+    *,
+    include_resident: bool | None = None,
+) -> list[dict[str, Any]]:
     return [
         item
-        for item in _guest_parking_history_items(payload)
-        if item.get("isExit") is False
+        for item in _guest_parking_history_items(payload, include_resident=include_resident)
+        if _guest_parking_is_exit(item) is False
     ]
 
 
 def _guest_parking_is_exit(item: dict[str, Any]) -> bool | None:
-    value = item.get("isExit")
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"y", "yes", "true", "1", "exit"}:
-            return True
-        if normalized in {"n", "no", "false", "0", "entry"}:
-            return False
-    return None
+    is_exit = _boolean_from_any(item.get("isExit"), include_event_words=True)
+    if is_exit is not None:
+        return is_exit
+    return _boolean_from_any(item.get("isOut"), include_event_words=True)
 
 
 def _guest_parking_entry_timestamp(item: dict[str, Any]) -> datetime | None:
-    return _parse_parking_history_datetime(item.get("inDatetime")) or _parse_parking_history_datetime(
-        item.get("inDateTime")
+    return (
+        _parse_parking_history_datetime(item.get("inDatetime"))
+        or _parse_parking_history_datetime(item.get("inDateTime"))
+        or _parse_parking_history_datetime(item.get("inDate"))
     )
 
 
 def _guest_parking_exit_timestamp(item: dict[str, Any]) -> datetime | None:
-    return _parse_parking_history_datetime(item.get("outDatetime")) or _parse_parking_history_datetime(
-        item.get("outDateTime")
+    return (
+        _parse_parking_history_datetime(item.get("outDatetime"))
+        or _parse_parking_history_datetime(item.get("outDateTime"))
+        or _parse_parking_history_datetime(item.get("outDate"))
     )
 
 
@@ -739,8 +814,13 @@ def _guest_parking_latest_item_by_timestamp(
     )
 
 
-def _guest_parking_latest_event_item(payload: Any, *, is_exit: bool) -> dict[str, Any] | None:
-    items = _guest_parking_history_items(payload)
+def _guest_parking_latest_event_item(
+    payload: Any,
+    *,
+    is_exit: bool,
+    include_resident: bool | None = None,
+) -> dict[str, Any] | None:
+    items = _guest_parking_history_items(payload, include_resident=include_resident)
     if is_exit:
         return _guest_parking_latest_item_by_timestamp(items, _guest_parking_exit_timestamp)
     return _guest_parking_latest_item_by_timestamp(items, _guest_parking_entry_timestamp)
@@ -762,44 +842,74 @@ def _guest_parking_item_datetime_text(
     return event_at.isoformat(sep=" ") if event_at is not None else None
 
 
-def _guest_parking_latest_entry(payload: Any) -> dict[str, Any] | None:
-    return _guest_parking_latest_event_item(payload, is_exit=False)
+def _guest_parking_latest_entry(
+    payload: Any,
+    *,
+    include_resident: bool | None = None,
+) -> dict[str, Any] | None:
+    return _guest_parking_latest_event_item(
+        payload,
+        is_exit=False,
+        include_resident=include_resident,
+    )
 
 
-def _guest_parking_latest_exit(payload: Any) -> dict[str, Any] | None:
-    return _guest_parking_latest_event_item(payload, is_exit=True)
+def _guest_parking_latest_exit(
+    payload: Any,
+    *,
+    include_resident: bool | None = None,
+) -> dict[str, Any] | None:
+    return _guest_parking_latest_event_item(
+        payload,
+        is_exit=True,
+        include_resident=include_resident,
+    )
 
 
-def _guest_parking_latest_entry_at(payload: Any) -> str | None:
-    latest_entry = _guest_parking_latest_entry(payload)
+def _guest_parking_latest_entry_at(
+    payload: Any,
+    *,
+    include_resident: bool | None = None,
+) -> str | None:
+    latest_entry = _guest_parking_latest_entry(payload, include_resident=include_resident)
     if latest_entry is None:
         return None
     return _guest_parking_item_datetime_text(
         latest_entry,
         "inDatetime",
         "inDateTime",
+        "inDate",
         "entryDatetime",
         "entryDateTime",
         fallback_fn=_guest_parking_entry_timestamp,
     )
 
 
-def _guest_parking_latest_exit_at(payload: Any) -> str | None:
-    latest_exit = _guest_parking_latest_exit(payload)
+def _guest_parking_latest_exit_at(
+    payload: Any,
+    *,
+    include_resident: bool | None = None,
+) -> str | None:
+    latest_exit = _guest_parking_latest_exit(payload, include_resident=include_resident)
     if latest_exit is None:
         return None
     return _guest_parking_item_datetime_text(
         latest_exit,
         "outDatetime",
         "outDateTime",
+        "outDate",
         "exitDatetime",
         "exitDateTime",
         fallback_fn=_guest_parking_exit_timestamp,
     )
 
 
-def _guest_parking_latest_event(payload: Any) -> dict[str, Any] | None:
-    items = _guest_parking_history_items(payload)
+def _guest_parking_latest_event(
+    payload: Any,
+    *,
+    include_resident: bool | None = None,
+) -> dict[str, Any] | None:
+    items = _guest_parking_history_items(payload, include_resident=include_resident)
     if not items:
         return None
     latest_item = max(
@@ -818,10 +928,14 @@ def _guest_parking_latest_event(payload: Any) -> dict[str, Any] | None:
     }
 
 
-def _guest_parking_active_count(payload: Any) -> int | None:
+def _guest_parking_active_count(
+    payload: Any,
+    *,
+    include_resident: bool | None = None,
+) -> int | None:
     if _error_text(payload):
         return None
-    return len(_guest_parking_active_items(payload))
+    return len(_guest_parking_active_items(payload, include_resident=include_resident))
 
 
 def _guest_parking_count_value(payload: Any) -> int | None:
@@ -860,16 +974,38 @@ def _guest_parking_attributes(payload: Any) -> dict[str, Any]:
     return attrs
 
 
-def _guest_parking_history_attributes(payload: Any) -> dict[str, Any]:
+def _guest_parking_history_attributes(
+    payload: Any,
+    *,
+    include_resident: bool | None = None,
+    scope: str = "all",
+) -> dict[str, Any]:
     attrs = _attributes_dict(payload)
     history = _list_or_empty(payload, "monthlyParkingHistoryList")
-    history_items = _guest_parking_history_items(payload)
-    active_items = _guest_parking_active_items(payload)
-    latest_event = _guest_parking_latest_event(payload)
-    latest_entry = _guest_parking_latest_entry(payload)
-    latest_exit = _guest_parking_latest_exit(payload)
-    attrs["history_count"] = len(history)
-    attrs["latest_history"] = history[0] if history and isinstance(history[0], dict) else None
+    access_list = _list_or_empty(payload, "accessList")
+    all_items = _guest_parking_history_items(payload, include_resident=None)
+    history_items = _guest_parking_history_items(payload, include_resident=include_resident)
+    resident_items = [item for item in all_items if item.get("_is_resident") is True]
+    visitor_items = [item for item in all_items if item.get("_is_resident") is not True]
+    active_items = _guest_parking_active_items(payload, include_resident=include_resident)
+    latest_event = _guest_parking_latest_event(payload, include_resident=include_resident)
+    latest_entry = _guest_parking_latest_entry(payload, include_resident=include_resident)
+    latest_exit = _guest_parking_latest_exit(payload, include_resident=include_resident)
+    attrs["scope"] = scope
+    attrs["include_resident"] = include_resident is not False
+    attrs["resident_only"] = include_resident is True
+    attrs["total_history_item_count"] = len(all_items)
+    attrs["resident_history_item_count"] = len(resident_items)
+    attrs["visitor_history_item_count"] = len(visitor_items)
+    attrs["api_contains_resident_records"] = bool(resident_items)
+    attrs["history_count"] = len(history) if history else len(access_list)
+    attrs["latest_history"] = (
+        history[0]
+        if history and isinstance(history[0], dict)
+        else access_list[0]
+        if access_list and isinstance(access_list[0], dict)
+        else None
+    )
     attrs["history_item_count"] = len(history_items)
     attrs["active_parking_count"] = len(active_items)
     attrs["active_vehicles"] = active_items
@@ -885,14 +1021,20 @@ def _guest_parking_history_attributes(payload: Any) -> dict[str, Any]:
     attrs["latest_event_at"] = latest_event.get("at") if isinstance(latest_event, dict) else None
     attrs["latest_event_item"] = latest_event.get("item") if isinstance(latest_event, dict) else None
     attrs["latest_entry"] = latest_entry
-    attrs["latest_entry_at"] = _guest_parking_latest_entry_at(payload)
+    attrs["latest_entry_at"] = _guest_parking_latest_entry_at(
+        payload,
+        include_resident=include_resident,
+    )
     attrs["latest_entry_car_no"] = (
         latest_entry.get("carNo")
         if isinstance(latest_entry, dict) and isinstance(latest_entry.get("carNo"), str)
         else None
     )
     attrs["latest_exit"] = latest_exit
-    attrs["latest_exit_at"] = _guest_parking_latest_exit_at(payload)
+    attrs["latest_exit_at"] = _guest_parking_latest_exit_at(
+        payload,
+        include_resident=include_resident,
+    )
     attrs["latest_exit_car_no"] = (
         latest_exit.get("carNo")
         if isinstance(latest_exit, dict) and isinstance(latest_exit.get("carNo"), str)
@@ -929,6 +1071,13 @@ def _guest_parking_history_attributes(payload: Any) -> dict[str, Any]:
         attrs["latest_event_summary"] = None
     attrs["remaining_free"] = _guest_parking_remaining_free(payload)
     return attrs
+
+
+def _parking_vehicle_history_payload(data: dict[str, Any]) -> Any:
+    payload = data.get("parking_hub_history")
+    if isinstance(payload, dict) and not _error_text(payload):
+        return payload
+    return data.get("guest_parking_history")
 
 
 def _parking_discount_attributes(payload: Any) -> dict[str, Any]:
@@ -1007,12 +1156,7 @@ def _management_fee_period(payload: Any) -> str | None:
 def _management_fee_average_value(payload: Any) -> int | None:
     if _error_text(payload):
         return None
-    if not isinstance(payload, dict):
-        return None
-    latest_detail = payload.get("latest_detail")
-    if not isinstance(latest_detail, dict):
-        return None
-    return _parse_int(latest_detail.get("currentFeeAverage"))
+    return _parse_int(_management_fee_detail(payload).get("currentFeeAverage"))
 
 
 def _management_fee_periods(payload: Any) -> list[dict[str, Any]]:
@@ -1099,11 +1243,35 @@ def _management_fee_change_value(payload: Any) -> int | None:
     return current_value - previous_value
 
 
-def _management_fee_detail(payload: Any) -> dict[str, Any]:
+def _management_fee_period_details(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    period_details = payload.get("period_details")
+    return period_details if isinstance(period_details, list) else []
+
+
+def _management_fee_period_detail(payload: Any, index: int) -> dict[str, Any] | None:
+    period_details = _management_fee_period_details(payload)
+    if 0 <= index < len(period_details) and isinstance(period_details[index], dict):
+        return period_details[index]
+    return None
+
+
+def _management_fee_detail(payload: Any, *, period_index: int = 0) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
-    latest_detail = payload.get("latest_detail")
-    return latest_detail if isinstance(latest_detail, dict) else {}
+    period_detail = _management_fee_period_detail(payload, period_index)
+    if isinstance(period_detail, dict):
+        detail = period_detail.get("detail")
+        if isinstance(detail, dict):
+            return detail
+    if period_index == 0:
+        latest_detail = payload.get("latest_detail")
+        return latest_detail if isinstance(latest_detail, dict) else {}
+    if period_index == 1:
+        previous_detail = payload.get("previous_detail")
+        return previous_detail if isinstance(previous_detail, dict) else {}
+    return {}
 
 
 def _split_csv_field(value: Any) -> list[str]:
@@ -1112,9 +1280,9 @@ def _split_csv_field(value: Any) -> list[str]:
     return [item.strip() for item in value.split(",")]
 
 
-def _management_fee_breakdown(payload: Any) -> dict[str, dict[str, Any]]:
+def _management_fee_breakdown(payload: Any, *, period_index: int = 0) -> dict[str, dict[str, Any]]:
     breakdown: dict[str, dict[str, Any]] = {}
-    for item in _management_fee_breakdown_items(payload):
+    for item in _management_fee_breakdown_items(payload, period_index=period_index):
         label = item.get("label")
         if not isinstance(label, str):
             continue
@@ -1128,8 +1296,7 @@ def _management_fee_breakdown(payload: Any) -> dict[str, dict[str, Any]]:
     return breakdown
 
 
-def _management_fee_breakdown_items(payload: Any) -> list[dict[str, Any]]:
-    detail = _management_fee_detail(payload)
+def _management_fee_breakdown_items_from_detail(detail: dict[str, Any]) -> list[dict[str, Any]]:
     labels = _split_csv_field(detail.get("etcItem"))
     values = _split_csv_field(detail.get("etcContents"))
     averages = _split_csv_field(detail.get("etcItemAverage"))
@@ -1153,38 +1320,59 @@ def _management_fee_breakdown_items(payload: Any) -> list[dict[str, Any]]:
     return breakdown
 
 
+def _management_fee_breakdown_items(payload: Any, *, period_index: int = 0) -> list[dict[str, Any]]:
+    detail = _management_fee_detail(payload, period_index=period_index)
+    return _management_fee_breakdown_items_from_detail(detail)
+
+
 def _management_fee_breakdown_count(payload: Any) -> int | None:
     if _error_text(payload):
         return None
     return len(_management_fee_breakdown_items(payload))
 
 
-def _management_fee_breakdown_item(payload: Any, index: int) -> dict[str, Any] | None:
-    for item in _management_fee_breakdown_items(payload):
+def _management_fee_breakdown_item(payload: Any, index: int, *, period_index: int = 0) -> dict[str, Any] | None:
+    for item in _management_fee_breakdown_items(payload, period_index=period_index):
         if item.get("index") == index:
             return item
     return None
 
 
-def _management_fee_text_field(payload: Any, field: str) -> str | None:
+def _management_fee_breakdown_item_by_label(
+    payload: Any,
+    label: str,
+    *,
+    period_index: int = 0,
+) -> dict[str, Any] | None:
+    normalized_label = label.strip()
+    if not normalized_label:
+        return None
+    for item in _management_fee_breakdown_items(payload, period_index=period_index):
+        item_label = item.get("label")
+        if isinstance(item_label, str) and item_label.strip() == normalized_label:
+            return item
+    return None
+
+
+def _management_fee_text_field(payload: Any, field: str, *, period_index: int = 0) -> str | None:
     if _error_text(payload):
         return None
-    detail = _management_fee_detail(payload)
+    detail = _management_fee_detail(payload, period_index=period_index)
     value = detail.get(field)
     return value if isinstance(value, str) else None
 
 
-def _management_fee_money_field(payload: Any, field: str) -> int | None:
+def _management_fee_money_field(payload: Any, field: str, *, period_index: int = 0) -> int | None:
     if _error_text(payload):
         return None
-    detail = _management_fee_detail(payload)
+    detail = _management_fee_detail(payload, period_index=period_index)
     return _parse_int(detail.get(field))
 
 
-def _management_fee_area_float(payload: Any) -> float | None:
+def _management_fee_area_float(payload: Any, *, period_index: int = 0) -> float | None:
     if _error_text(payload):
         return None
-    detail = _management_fee_detail(payload)
+    detail = _management_fee_detail(payload, period_index=period_index)
     return _parse_float(detail.get("area"))
 
 
@@ -1243,42 +1431,17 @@ def _management_fee_entity_index(item: dict[str, Any], fallback_index: int) -> i
     return index if isinstance(index, int) else fallback_index
 
 
-def _management_fee_attributes(payload: Any) -> dict[str, Any]:
+def _management_fee_common_attributes(payload: Any) -> dict[str, Any]:
     if payload is None:
         return {}
     if not isinstance(payload, dict):
         return {"value": payload}
 
-    detail = _management_fee_detail(payload)
-    breakdown_items = _management_fee_breakdown_items(payload)
     summary = _management_fee_summary(payload)
-    attrs = dict(payload)
-    attrs["breakdown"] = _management_fee_breakdown(payload)
-    attrs["breakdown_items"] = breakdown_items
-    attrs["breakdown_count"] = len(breakdown_items)
-    attrs["breakdown_value_total"] = sum(
-        item.get("value") or 0
-        for item in breakdown_items
-        if isinstance(item.get("value"), int)
-    )
-    attrs["breakdown_average_total"] = sum(
-        item.get("average") or 0
-        for item in breakdown_items
-        if isinstance(item.get("average"), int)
-    )
-    top_breakdown_item = max(
-        breakdown_items,
-        key=lambda item: item.get("value") if isinstance(item.get("value"), int) else -1,
-        default=None,
-    )
-    attrs["top_breakdown_item"] = top_breakdown_item
-    attrs["top_breakdown_label"] = (
-        top_breakdown_item.get("label") if isinstance(top_breakdown_item, dict) else None
-    )
-    attrs["top_breakdown_value"] = (
-        top_breakdown_item.get("value") if isinstance(top_breakdown_item, dict) else None
-    )
-    attrs["latest_detail"] = detail
+    attrs: dict[str, Any] = {}
+    error = _error_text(payload)
+    if isinstance(error, str):
+        attrs["_error"] = error
     attrs["summary"] = summary
     attrs.update(summary)
     period_change = summary.get("period_change")
@@ -1292,6 +1455,122 @@ def _management_fee_attributes(payload: Any) -> dict[str, Any]:
         else None
     )
     attrs["has_outstanding_balance"] = bool(summary.get("total_outstanding"))
+    return attrs
+
+
+def _management_fee_breakdown_totals(
+    breakdown_items: list[dict[str, Any]],
+) -> tuple[int, int]:
+    value_total = sum(
+        item.get("value") or 0
+        for item in breakdown_items
+        if isinstance(item.get("value"), int)
+    )
+    average_total = sum(
+        item.get("average") or 0
+        for item in breakdown_items
+        if isinstance(item.get("average"), int)
+    )
+    return value_total, average_total
+
+
+def _management_fee_top_breakdown_item(
+    breakdown_items: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    return max(
+        breakdown_items,
+        key=lambda item: item.get("value") if isinstance(item.get("value"), int) else -1,
+        default=None,
+    )
+
+
+def _management_fee_period_attributes(
+    payload: Any,
+    *,
+    period_index: int,
+    scope: str,
+) -> dict[str, Any]:
+    attrs = _management_fee_common_attributes(payload)
+    if not isinstance(payload, dict):
+        return attrs
+
+    detail = _management_fee_detail(payload, period_index=period_index)
+    breakdown_items = _management_fee_breakdown_items(payload, period_index=period_index)
+    breakdown_value_total, breakdown_average_total = _management_fee_breakdown_totals(breakdown_items)
+    top_breakdown_item = _management_fee_top_breakdown_item(breakdown_items)
+
+    attrs["period_scope"] = scope
+    attrs["period_index"] = period_index
+    attrs["detail"] = detail
+    attrs["breakdown"] = _management_fee_breakdown(payload, period_index=period_index)
+    attrs["breakdown_items"] = breakdown_items
+    attrs["breakdown_count"] = len(breakdown_items)
+    attrs["breakdown_value_total"] = breakdown_value_total
+    attrs["breakdown_average_total"] = breakdown_average_total
+    attrs["top_breakdown_item"] = top_breakdown_item
+    attrs["top_breakdown_label"] = (
+        top_breakdown_item.get("label") if isinstance(top_breakdown_item, dict) else None
+    )
+    attrs["top_breakdown_value"] = (
+        top_breakdown_item.get("value") if isinstance(top_breakdown_item, dict) else None
+    )
+
+    if period_index == 0:
+        attrs["latest_detail"] = detail
+
+    return attrs
+
+
+def _management_fee_current_attributes(payload: Any) -> dict[str, Any]:
+    return _management_fee_period_attributes(
+        payload,
+        period_index=0,
+        scope="current",
+    )
+
+
+def _management_fee_previous_attributes(payload: Any) -> dict[str, Any]:
+    return _management_fee_period_attributes(
+        payload,
+        period_index=1,
+        scope="previous",
+    )
+
+
+def _management_fee_change_attributes(payload: Any) -> dict[str, Any]:
+    attrs = _management_fee_period_attributes(
+        payload,
+        period_index=0,
+        scope="current",
+    )
+    if not isinstance(payload, dict):
+        return attrs
+
+    previous_detail = _management_fee_detail(payload, period_index=1)
+    previous_breakdown_items = _management_fee_breakdown_items(payload, period_index=1)
+    previous_breakdown_value_total, previous_breakdown_average_total = _management_fee_breakdown_totals(
+        previous_breakdown_items
+    )
+    previous_top_breakdown_item = _management_fee_top_breakdown_item(previous_breakdown_items)
+
+    attrs["comparison_scope"] = "current_vs_previous"
+    attrs["previous_detail"] = previous_detail
+    attrs["previous_breakdown"] = _management_fee_breakdown(payload, period_index=1)
+    attrs["previous_breakdown_items"] = previous_breakdown_items
+    attrs["previous_breakdown_count"] = len(previous_breakdown_items)
+    attrs["previous_breakdown_value_total"] = previous_breakdown_value_total
+    attrs["previous_breakdown_average_total"] = previous_breakdown_average_total
+    attrs["previous_top_breakdown_item"] = previous_top_breakdown_item
+    attrs["previous_top_breakdown_label"] = (
+        previous_top_breakdown_item.get("label")
+        if isinstance(previous_top_breakdown_item, dict)
+        else None
+    )
+    attrs["previous_top_breakdown_value"] = (
+        previous_top_breakdown_item.get("value")
+        if isinstance(previous_top_breakdown_item, dict)
+        else None
+    )
     return attrs
 
 
@@ -1861,16 +2140,60 @@ SENSORS: tuple[AptnerSensorDescription, ...] = (
         name="Parking Last Entry Time",
         icon="mdi:car-arrow-left",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: _guest_parking_latest_entry_at(data.get("guest_parking_history")),
-        attributes_fn=lambda data: _guest_parking_history_attributes(data.get("guest_parking_history")),
+        value_fn=lambda data: _guest_parking_latest_entry_at(
+            _parking_vehicle_history_payload(data),
+            include_resident=False,
+        ),
+        attributes_fn=lambda data: _guest_parking_history_attributes(
+            _parking_vehicle_history_payload(data),
+            include_resident=False,
+            scope="visitor_only",
+        ),
     ),
     AptnerSensorDescription(
         key="parking_vehicle_last_exit_at",
         name="Parking Last Exit Time",
         icon="mdi:car-arrow-right",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: _guest_parking_latest_exit_at(data.get("guest_parking_history")),
-        attributes_fn=lambda data: _guest_parking_history_attributes(data.get("guest_parking_history")),
+        value_fn=lambda data: _guest_parking_latest_exit_at(
+            _parking_vehicle_history_payload(data),
+            include_resident=False,
+        ),
+        attributes_fn=lambda data: _guest_parking_history_attributes(
+            _parking_vehicle_history_payload(data),
+            include_resident=False,
+            scope="visitor_only",
+        ),
+    ),
+    AptnerSensorDescription(
+        key="parking_vehicle_last_entry_at_all",
+        name="Parking Last Entry Time (All Vehicles)",
+        icon="mdi:car-arrow-left",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _guest_parking_latest_entry_at(
+            _parking_vehicle_history_payload(data),
+            include_resident=None,
+        ),
+        attributes_fn=lambda data: _guest_parking_history_attributes(
+            _parking_vehicle_history_payload(data),
+            include_resident=None,
+            scope="all_vehicles",
+        ),
+    ),
+    AptnerSensorDescription(
+        key="parking_vehicle_last_exit_at_all",
+        name="Parking Last Exit Time (All Vehicles)",
+        icon="mdi:car-arrow-right",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _guest_parking_latest_exit_at(
+            _parking_vehicle_history_payload(data),
+            include_resident=None,
+        ),
+        attributes_fn=lambda data: _guest_parking_history_attributes(
+            _parking_vehicle_history_payload(data),
+            include_resident=None,
+            scope="all_vehicles",
+        ),
     ),
     AptnerSensorDescription(
         key="visit_vehicle_usage_count",
@@ -1951,14 +2274,14 @@ SENSORS: tuple[AptnerSensorDescription, ...] = (
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="KRW",
         value_fn=lambda data: _management_fee_value(data.get("management_fee")),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_current_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_period",
         name="Management Fee Period",
         icon="mdi:calendar-range",
         value_fn=lambda data: _management_fee_period(data.get("management_fee")),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_current_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_average",
@@ -1967,7 +2290,7 @@ SENSORS: tuple[AptnerSensorDescription, ...] = (
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="KRW",
         value_fn=lambda data: _management_fee_average_value(data.get("management_fee")),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_current_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_previous",
@@ -1976,14 +2299,14 @@ SENSORS: tuple[AptnerSensorDescription, ...] = (
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="KRW",
         value_fn=lambda data: _management_fee_previous_value(data.get("management_fee")),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_previous_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_previous_period",
         name="Previous Management Fee Period",
         icon="mdi:calendar-previous",
         value_fn=lambda data: _management_fee_previous_period(data.get("management_fee")),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_previous_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_change",
@@ -1992,14 +2315,14 @@ SENSORS: tuple[AptnerSensorDescription, ...] = (
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="KRW",
         value_fn=lambda data: _management_fee_change_value(data.get("management_fee")),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_change_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_history_count",
         name="Management Fee History Count",
         icon="mdi:calendar-multiple",
         value_fn=lambda data: _management_fee_history_count(data.get("management_fee")),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_common_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_area",
@@ -2007,7 +2330,7 @@ SENSORS: tuple[AptnerSensorDescription, ...] = (
         icon="mdi:ruler-square",
         suggested_display_precision=2,
         value_fn=lambda data: _management_fee_area_float(data.get("management_fee")),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_current_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_current_late_fee",
@@ -2016,7 +2339,7 @@ SENSORS: tuple[AptnerSensorDescription, ...] = (
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="KRW",
         value_fn=lambda data: _management_fee_money_field(data.get("management_fee"), "currentLateFee"),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_current_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_delinquent_fee",
@@ -2025,7 +2348,7 @@ SENSORS: tuple[AptnerSensorDescription, ...] = (
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="KRW",
         value_fn=lambda data: _management_fee_money_field(data.get("management_fee"), "delinquentFee"),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_current_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_delinquent_late_fee",
@@ -2034,14 +2357,14 @@ SENSORS: tuple[AptnerSensorDescription, ...] = (
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="KRW",
         value_fn=lambda data: _management_fee_money_field(data.get("management_fee"), "delinquentLateFee"),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_current_attributes(data.get("management_fee")),
     ),
     AptnerSensorDescription(
         key="management_fee_breakdown_count",
         name="Management Fee Breakdown Count",
         icon="mdi:format-list-bulleted",
         value_fn=lambda data: _management_fee_breakdown_count(data.get("management_fee")),
-        attributes_fn=lambda data: _management_fee_attributes(data.get("management_fee")),
+        attributes_fn=lambda data: _management_fee_current_attributes(data.get("management_fee")),
     ),
 )
 
@@ -2158,9 +2481,26 @@ class AptnerFeeBreakdownSensor(CoordinatorEntity[AptnerDataUpdateCoordinator], S
     def extra_state_attributes(self) -> dict[str, Any]:
         payload = self.coordinator.data.get("management_fee")
         item = _management_fee_breakdown_item(payload, self._index)
+        current_label = (
+            item.get("label")
+            if isinstance(item, dict) and isinstance(item.get("label"), str)
+            else self._attr_name
+            if isinstance(self._attr_name, str)
+            else None
+        )
+        previous_item = (
+            _management_fee_breakdown_item_by_label(payload, current_label, period_index=1)
+            if isinstance(current_label, str) and current_label
+            else None
+        )
+        if previous_item is None:
+            previous_item = _management_fee_breakdown_item(payload, self._index, period_index=1)
+
         attrs: dict[str, Any] = {
             "index": self._index,
+            "label": current_label,
             "period": _management_fee_period(payload),
+            "previous_period": _management_fee_previous_period(payload),
             "area": _management_fee_text_field(payload, "area"),
             "area_square_meter": _management_fee_area_float(payload),
         }
@@ -2183,6 +2523,49 @@ class AptnerFeeBreakdownSensor(CoordinatorEntity[AptnerDataUpdateCoordinator], S
             attrs["is_above_average"] = None
             attrs["is_below_average"] = None
             attrs["value_ratio_to_average"] = None
+
+        previous_value = None
+        if isinstance(previous_item, dict):
+            attrs["previous_item"] = previous_item
+            attrs["previous_index"] = previous_item.get("index")
+            attrs["previous_label"] = previous_item.get("label")
+            attrs["previous_value_raw"] = previous_item.get("value_raw")
+            attrs["previous_average_raw"] = previous_item.get("average_raw")
+            previous_value = previous_item.get("value") if isinstance(previous_item.get("value"), int) else None
+            previous_average = (
+                previous_item.get("average")
+                if isinstance(previous_item.get("average"), int)
+                else None
+            )
+            attrs["previous_value"] = previous_value
+            attrs["previous_average"] = previous_average
+            attrs["previous_delta_to_average"] = (
+                previous_value - previous_average
+                if isinstance(previous_value, int) and isinstance(previous_average, int)
+                else None
+            )
+        else:
+            attrs["previous_item"] = None
+            attrs["previous_value"] = None
+            attrs["previous_average"] = None
+            attrs["previous_delta_to_average"] = None
+
+        attrs["has_previous_value"] = isinstance(previous_value, int)
+        if isinstance(value, int) and isinstance(previous_value, int):
+            change_from_previous = value - previous_value
+            attrs["change_from_previous"] = change_from_previous
+            attrs["change_rate_from_previous"] = (
+                round(change_from_previous / previous_value, 4)
+                if previous_value != 0
+                else None
+            )
+            attrs["is_increase_from_previous"] = change_from_previous > 0
+            attrs["is_decrease_from_previous"] = change_from_previous < 0
+        else:
+            attrs["change_from_previous"] = None
+            attrs["change_rate_from_previous"] = None
+            attrs["is_increase_from_previous"] = None
+            attrs["is_decrease_from_previous"] = None
         return attrs
 
     @property

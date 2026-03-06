@@ -215,10 +215,16 @@
         "name": "주차 결제 이력 수"
       },
       "parking_vehicle_last_entry_at": {
-        "name": "최근 입차 시각"
+        "name": "최근 입차 시각 (방문차량)"
       },
       "parking_vehicle_last_exit_at": {
-        "name": "최근 출차 시각"
+        "name": "최근 출차 시각 (방문차량)"
+      },
+      "parking_vehicle_last_entry_at_all": {
+        "name": "최근 입차 시각 (우리집 차량 포함)"
+      },
+      "parking_vehicle_last_exit_at_all": {
+        "name": "최근 출차 시각 (우리집 차량 포함)"
       },
       "visit_vehicle_usage_count": {
         "name": "방문차량 예약 수"
@@ -294,13 +300,22 @@
     },
     "binary_sensor": {
       "parking_vehicle_inside": {
-        "name": "현재 주차중 차량"
+        "name": "현재 주차중 차량 (방문차량)"
       },
       "parking_vehicle_last_event_entry": {
-        "name": "마지막 주차 이벤트 입차"
+        "name": "마지막 주차 이벤트 입차 (방문차량)"
       },
       "parking_vehicle_last_event_exit": {
-        "name": "마지막 주차 이벤트 출차"
+        "name": "마지막 주차 이벤트 출차 (방문차량)"
+      },
+      "parking_vehicle_inside_all": {
+        "name": "현재 주차중 차량 (우리집 차량 포함)"
+      },
+      "parking_vehicle_last_event_entry_all": {
+        "name": "마지막 주차 이벤트 입차 (우리집 차량 포함)"
+      },
+      "parking_vehicle_last_event_exit_all": {
+        "name": "마지막 주차 이벤트 출차 (우리집 차량 포함)"
       },
       "visit_vehicle_alert": {
         "name": "방문차량 입차 알림"

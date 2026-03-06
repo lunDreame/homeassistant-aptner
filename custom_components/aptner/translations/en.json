@@ -215,10 +215,16 @@
         "name": "Parking Payment History Count"
       },
       "parking_vehicle_last_entry_at": {
-        "name": "Parking Last Entry Time"
+        "name": "Parking Last Entry Time (Visitor)"
       },
       "parking_vehicle_last_exit_at": {
-        "name": "Parking Last Exit Time"
+        "name": "Parking Last Exit Time (Visitor)"
+      },
+      "parking_vehicle_last_entry_at_all": {
+        "name": "Parking Last Entry Time (All Vehicles)"
+      },
+      "parking_vehicle_last_exit_at_all": {
+        "name": "Parking Last Exit Time (All Vehicles)"
       },
       "visit_vehicle_usage_count": {
         "name": "Visit Vehicle Reservation Count"
@@ -294,13 +300,22 @@
     },
     "binary_sensor": {
       "parking_vehicle_inside": {
-        "name": "Parking Vehicle Inside"
+        "name": "Parking Vehicle Inside (Visitor)"
       },
       "parking_vehicle_last_event_entry": {
-        "name": "Parking Last Event Entry"
+        "name": "Parking Last Event Entry (Visitor)"
       },
       "parking_vehicle_last_event_exit": {
-        "name": "Parking Last Event Exit"
+        "name": "Parking Last Event Exit (Visitor)"
+      },
+      "parking_vehicle_inside_all": {
+        "name": "Parking Vehicle Inside (All Vehicles)"
+      },
+      "parking_vehicle_last_event_entry_all": {
+        "name": "Parking Last Event Entry (All Vehicles)"
+      },
+      "parking_vehicle_last_event_exit_all": {
+        "name": "Parking Last Event Exit (All Vehicles)"
       },
       "visit_vehicle_alert": {
         "name": "Visit Vehicle Alert"
